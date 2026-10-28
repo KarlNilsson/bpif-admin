@@ -1,0 +1,39 @@
+# Shared base stack. Development additions live in docker-compose.override.yml
+# (applied automatically), production additions in docker-compose.production.yml
+# (applied explicitly with -f). No service publishes a port here.
+
+services:
+  db:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:?}
+    volumes:
+      # From version 18 the image keeps its data in a version-specific subdirectory.
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?}
+      CORS_ORIGINS: ${CORS_ORIGINS:-[]}
+      # Uvicorn otherwise only trusts proxy headers from 127.0.0.1. The backend is
+      # only reachable from inside the compose network.
+      FORWARDED_ALLOW_IPS: '*'
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      # nginx must be able to resolve `backend` when it starts.
+      - backend
+
+volumes:
+  db-data:
