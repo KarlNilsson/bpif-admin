@@ -135,8 +135,9 @@ frontend/src/
 ### Docker
 
 ```
-docker-compose.yml            Base stack: db, backend, frontend
-docker-compose.override.yml   Development overrides (hot reload, exposed ports), applied automatically by `docker compose up`, making development the default
+docker-compose.yml            Shared base stack: db, backend, frontend (no published ports)
+docker-compose.override.yml   Development additions (hot reload, exposed ports), applied automatically by `docker compose up`, making development the default
+docker-compose.production.yml Production additions (nginx port, restart policies), applied explicitly with `-f`
 .env.example                  Template for `.env` (committed); `.env` holds real values and is git-ignored
 backend/Dockerfile
 backend/entrypoint.sh         Runs migrations, then starts the given command
@@ -158,6 +159,8 @@ Services in `docker-compose.yml`:
 - **Migrations run as part of the backend container.** `backend/entrypoint.sh` is the image's `ENTRYPOINT`: it runs `alembic upgrade head` and then `exec "$@"`, handing over to the container's `CMD`. The script uses `set -e`, so a failed migration stops the container before the API starts. Because migrations live in the entrypoint, overriding the command (e.g. with `--reload` in development) still runs them.
 - **Backend Dockerfile.** Based on `python:3.13-slim`. Copy the dependency manifest and install dependencies before copying the source, so the dependency layer is cached. Run as a non-root user. The default `CMD` is `uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers` (proxy headers, since it sits behind nginx).
 - **Frontend Dockerfile.** Multi-stage: a `node` stage installs dependencies with the lockfile (`npm ci`) and runs `npm run build`; a final `nginx:alpine` stage contains only the static build output and `nginx.conf`. The nginx config uses `try_files $uri /index.html` as the SPA fallback and `location /api/ { proxy_pass http://backend:8000; }` for the API.
-- **Development override.** `docker-compose.override.yml` bind-mounts the source directories, runs the backend with `uvicorn --reload` and the frontend with the Vite dev server (`--host 0.0.0.0`), and exposes the ports for the backend, the frontend dev server and the database to the host. Nothing development-only belongs in the base `docker-compose.yml`. `docker compose up` gives the development setup; for a production-like run, skip the override with `docker compose -f docker-compose.yml up`.
+- **Additive compose files.** The base `docker-compose.yml` holds only what both environments share; nothing development-only or production-only belongs in it. The environment files only add to the base and never remove from it (no `!reset` / `!override`), so leaving one out can never leak development settings into production.
+- **Development override.** `docker-compose.override.yml` bind-mounts the source directories, runs the backend with `uvicorn --reload` and the frontend with the Vite dev server (`--host 0.0.0.0`), and exposes the ports for the backend, the frontend dev server and the database to the host. `docker compose up` gives the development setup.
+- **Production override.** `docker-compose.production.yml` selects the `prod` build targets, publishes the nginx port and sets restart policies. Run it with `docker compose -f docker-compose.yml -f docker-compose.production.yml up -d`; naming the files explicitly skips the development override.
 - **`.dockerignore`.** Each project excludes `.git`, `.env`, caches and local dependency/build folders (`.venv`, `__pycache__`, `node_modules`, `.svelte-kit`, `build`) to keep build contexts small and avoid leaking local files into images.
 - **Tests in Docker.** Backend tests run with `docker compose run --rm --entrypoint pytest backend`, against a separate test database (never the development database). The entrypoint is bypassed because the test setup applies migrations to the test database itself.
