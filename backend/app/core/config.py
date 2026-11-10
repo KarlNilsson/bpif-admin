@@ -4,9 +4,12 @@ from typing import Annotated
 from fastapi import Depends
 from pydantic_settings import BaseSettings
 
+from app.payments.schemas import SwishNumber
+
 
 class Settings(BaseSettings):
     database_url: str
+    swish_number: SwishNumber
     cors_origins: list[str] = []
 
 

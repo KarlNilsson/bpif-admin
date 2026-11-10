@@ -11,6 +11,7 @@ dependencies = [
     "pydantic-settings>=2.16.1",
     "qrcode>=8.2",
     "sqlalchemy[asyncio]>=2.1.6",
+    "tzdata>=2026.6",
     "uvicorn[standard]>=0.54.0",
 ]
 
@@ -22,6 +23,11 @@ dev = [
     "zxing-cpp>=3.1.1",
 ]
 
+[tool.autopep8]
+max_line_length = 79
+recursive = true
+
 [tool.pytest.ini_options]
 testpaths = ['tests']
 pythonpath = ['.']
+addopts = ['--strict-markers', '-ra']

@@ -6,11 +6,14 @@ services:
     restart: unless-stopped
 
   backend:
+    # Separate tags per environment, see docker-compose.override.yml.
+    image: bpif-admin-backend:prod
     build:
       target: prod
     restart: unless-stopped
 
   frontend:
+    image: bpif-admin-frontend:prod
     build:
       target: prod
     ports:

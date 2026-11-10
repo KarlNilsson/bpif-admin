@@ -6,7 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.database import create_engine, create_session_factory
+from app.core.exceptions import register_exception_handlers
+from app.fees import router as fees_router
 from app.health.router import router as health_router
+from app.members import router as members_router
+from app.membership_types import router as membership_types_router
+from app.payments import router as payments_router
 
 
 @asynccontextmanager
@@ -39,8 +44,22 @@ def create_app() -> FastAPI:
             allow_headers=['*'],
         )
 
+    register_exception_handlers(app)
+
     api_router = APIRouter(prefix='/api/v1')
     api_router.include_router(health_router)
+    api_router.include_router(membership_types_router.public_router)
+    api_router.include_router(payments_router.public_router)
+
+    # Every management endpoint is mounted here. Step 4 protects all of them
+    # with APIRouter(dependencies=[Depends(get_current_admin)]). Until then
+    # they are open: don't deploy publicly.
+    admin_router = APIRouter()
+    admin_router.include_router(members_router.admin_router)
+    admin_router.include_router(fees_router.admin_router)
+    admin_router.include_router(payments_router.admin_router)
+
+    api_router.include_router(admin_router)
     app.include_router(api_router)
 
     return app

@@ -415,13 +415,14 @@ same.
   - Only letters, spaces, hyphens and apostrophes are allowed. Control characters, markup and emoji are silently filtered.
 - The amount comes only from the membership type, and the message is built only on the server. The client has no
   other input.
-- Each payment request is saved to the database. A payment request has the columns `id`, `swish_number`, `name_list` (all names as a semicolon-separated list), `amount`, `year` and `created_at`.
+- Each payment request is saved to the database. A payment request has the columns `id`, `swish_number`, `name_list` (all names as a semicolon-separated list), `amount_ore`, `year` and `created_at`.
 - The message is at most 50 characters and uses only characters Swish allows. This is checked against worst-case
   input.
 - The QR service module `app/payments/qr.py` is a pure function from payload to PNG bytes using `qrcode` and `pillow`.
   Routers call it via `run_in_threadpool`.
-- The payload follows Swish's prefilled QR code specification: payee, amount and message, with the fields locked from
-  editing. Verify the current specification during implementation.
+- The payload follows Swish's prefilled QR code specification: payee, amount and message. The payee and amount are
+  locked from editing. The message stays editable by the payer (`edit=msg`). Verify the current specification during
+  implementation.
 - The message used for generating the QR code is constructed like this:
   - 'Medlemskap {name1}(, {name2}...)'.
   - If the list of name exceeds 50 characters, convert it down to initials (first letter of first and last name respectively) for each name.
@@ -431,7 +432,7 @@ same.
   - The amount comes from the membership type.
     - Junior - 300kr (active)
     - Senior - 500kr (active)
-    - Family (more than one name entered) - 700kr (mix of active and passive)
+    - Family - 700kr (mix of active and passive). The number of names is not tied to the membership type.
     - Supportive - 300kr (passive)
   - The response has the PNG content type and decodes.
 - Frontend: a form (names and membership type) that shows the resulting QR image.
@@ -445,7 +446,8 @@ same.
     - _Message format is a string, and due to a hard Swish limitation the message in the QR code can **never** exceed 50 characters_
     - _The message should contain the name of the member(s)._
   - Should a payment request link to member and fee records to make matching payments easier?
-    - _Yes._
+    - _Yes._ An administrator chooses the members and marks their fees paid in one action, and `fees.payment_request_id`
+      is the only link. Name matching is never automatic.
 
 ## Step 8 — Member fee status
 

@@ -6,6 +6,9 @@ services:
       - '5432:5432'
 
   backend:
+    # Separate tags per environment: otherwise a production build overwrites the
+    # shared default image name and `docker compose up` silently reuses it.
+    image: bpif-admin-backend:dev
     build:
       target: dev
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -13,10 +16,13 @@ services:
       - ./backend:/app
     environment:
       WATCHFILES_FORCE_POLLING: 'true'
+      # Used only by the test suite (`docker compose run --rm --entrypoint pytest backend`).
+      TEST_DATABASE_URL: ${TEST_DATABASE_URL:?}
     ports:
       - '8000:8000'
 
   frontend:
+    image: bpif-admin-frontend:dev
     build:
       target: dev
     volumes:

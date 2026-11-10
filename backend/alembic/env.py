@@ -6,17 +6,16 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import context
+import app.models  # noqa: F401  (registers every domain's models)
 from app.core.config import get_settings
 from app.core.database import Base
 
-# --- Model imports -----------------------------------------------------------
-# Import every domain's models module here so that autogenerate sees all tables,
-# e.g. `import app.members.models  # noqa: F401`.
-# -----------------------------------------------------------------------------
-
 config = context.config
 
-if config.config_file_name is not None:
+# A caller that passes in its own connection (the test harness) also owns the
+# logging setup, so it isn't reconfigured from alembic.ini.
+if (config.config_file_name is not None
+        and 'connection' not in config.attributes):
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
@@ -57,8 +56,17 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
-    '''Run migrations in 'online' mode.'''
-    asyncio.run(run_async_migrations())
+    '''Run migrations in 'online' mode.
+
+    A caller may pass an open connection through
+    `config.attributes['connection']` (the test harness does). Otherwise an
+    engine is created from the settings.
+    '''
+    connection = config.attributes.get('connection')
+    if connection is None:
+        asyncio.run(run_async_migrations())
+    else:
+        do_run_migrations(connection)
 
 
 if context.is_offline_mode():

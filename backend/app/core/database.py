@@ -3,15 +3,15 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 from sqlalchemy import MetaData
-from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession, async_sessionmaker,
-                                    create_async_engine)
+from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession,
+                                    async_sessionmaker, create_async_engine)
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import Settings
 
 NAMING_CONVENTION = {
-    'ix': 'ix_%(column_0_label)s',
-    'uq': 'uq_%(table_name)s_%(column_0_name)s',
+    'ix': 'ix_%(column_0_N_label)s',
+    'uq': 'uq_%(table_name)s_%(column_0_N_name)s',
     'ck': 'ck_%(table_name)s_%(constraint_name)s',
     'fk': 'fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s',
     'pk': 'pk_%(table_name)s',
@@ -26,12 +26,14 @@ def create_engine(settings: Settings) -> AsyncEngine:
     return create_async_engine(settings.database_url, pool_pre_ping=True)
 
 
-def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+def create_session_factory(
+        engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     return async_sessionmaker(engine, expire_on_commit=False)
 
 
 async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
-    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    session_factory: async_sessionmaker[AsyncSession] = (
+        request.app.state.session_factory)
     async with session_factory() as session:
         yield session
 

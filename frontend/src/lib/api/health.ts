@@ -1,6 +1,6 @@
 import type { Health } from '#lib/types/health.ts';
-import { request, type Fetch } from './client';
+import { api, type Fetch } from './client.ts';
 
 export function getHealth(fetchFn: Fetch): Promise<Health> {
-	return request<Health>(fetchFn, '/health');
+	return api.get<Health>(fetchFn, '/health');
 }

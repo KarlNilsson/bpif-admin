@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_USER: bpif
+          POSTGRES_PASSWORD: bpif-pw
+          POSTGRES_DB: bpif
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bpif -d bpif"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql+asyncpg://bpif:bpif-pw@localhost:5432/bpif
+      TEST_DATABASE_URL: postgresql+asyncpg://bpif:bpif-pw@localhost:5432/bpif_test
+      SWISH_NUMBER: "1231234567"
+    steps:
+      - uses: actions/checkout@v7
+
+      # uv installs the Python version from backend/.python-version.
+      - uses: astral-sh/setup-uv@v7
+        with:
+          working-directory: backend
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - run: uv sync --frozen
+      - name: Check formatting
+        run: uv run autopep8 --diff --exit-code -r app tests alembic scripts
+      - run: uv run pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run check
+      - run: npm run build
+
+      # Fails when a backend schema changed without `npm run generate:types`.
+      - uses: astral-sh/setup-uv@v7
+        with:
+          working-directory: backend
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Export the OpenAPI schema
+        working-directory: backend
+        env:
+          # Any valid values will do: no database connection is made.
+          DATABASE_URL: postgresql+asyncpg://ci:ci@localhost:5432/ci
+          SWISH_NUMBER: "1231234567"
+        run: uv run --frozen --no-dev python scripts/export_openapi.py > "$RUNNER_TEMP/openapi.json"
+
+      - name: Check that the generated API types are up to date
+        run: |
+          npx openapi-typescript "$RUNNER_TEMP/openapi.json" -o src/lib/types/api.ts
+          git diff --exit-code -- src/lib/types/api.ts
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: cp .env.example .env
+      - name: Build the production images
+        run: docker compose -f docker-compose.yml -f docker-compose.production.yml build

@@ -1,11 +1,16 @@
 import re
 import unicodedata
+from datetime import datetime
 from typing import Annotated
+from uuid import UUID
 
 from pydantic import (AfterValidator, BaseModel, ConfigDict, Field,
                       PositiveInt, StringConstraints)
 
 from app.payments.message import to_swish_text
+
+# app.core.config imports this module, so it must not import anything that
+# depends on the settings, such as the models.
 
 # Chosen so the message always fits in initials form, see
 # app.payments.message.build_message.
@@ -51,3 +56,67 @@ class SwishQrData(BaseModel):
     names: NameList
     amount_ore: PositiveInt
     swish_number: SwishNumber
+
+
+class PaymentRequestCreate(BaseModel):
+    # Any other field (amount, message, ...) is a 422: the client's only input
+    # is the names and the membership type.
+    model_config = ConfigDict(extra='forbid')
+
+    names: NameList
+    membership_type_id: int
+
+
+class PaymentRequestRead(BaseModel):
+    id: UUID
+    names: list[str]
+    message: str
+    amount_ore: int
+    swish_number: str
+    year: int
+    created_at: datetime
+    payment_url: str
+
+
+class LinkedMemberRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    member_number: str
+    name: str
+
+
+class LinkedFeeRead(BaseModel):
+    """A fee paid through a payment request. A linked fee is always paid."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    paid_at: datetime
+    member: LinkedMemberRead
+
+
+class PaymentRequestAdminRead(PaymentRequestRead):
+    fees: list[LinkedFeeRead]
+
+
+class PaymentRequestList(BaseModel):
+    # The year the backend chose, also when the list is empty.
+    year: int
+    items: list[PaymentRequestAdminRead]
+
+
+def _unique(values: list[int]) -> list[int]:
+    return list(dict.fromkeys(values))
+
+
+class MarkFeesPaid(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    member_ids: Annotated[list[int], Field(min_length=1, max_length=20),
+                          AfterValidator(_unique)]
+
+
+class MarkFeesPaidResult(BaseModel):
+    marked: int
+    created: int
+    already_paid: int
